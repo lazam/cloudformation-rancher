@@ -1,0 +1,287 @@
+---
+Parameters:
+  ELBName:
+    Description: Enter the name of ELB
+    Type: String
+    MinLength: 1
+    MaxLength: 25
+    AllowedPattern: "[a-zA-Z][a-zA-Z0-9]*"
+    Default: RancherELB
+  RDSName:
+    Description: Enter the name of RDS
+    Type: String
+    MinLength: 1
+    MaxLength: 25
+    AllowedPattern: "[a-zA-Z][a-zA-Z0-9]*"
+    Default: RancherRDS
+  RancherHA:
+    Description: Enter if Rancher will be configured as HA? (Y/N)
+    Type: String
+    MaxLength: 1
+    AllowedValues:
+    - Y
+    - N
+  EC2InstanceType:
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+    - t1.micro
+    - t2.micro
+    - t2.small
+    - t2.medium
+    - m1.small
+    - m1.medium
+    - m1.large
+    - m1.xlarge
+    - m2.xlarge
+    - m2.2xlarge
+    - m2.4xlarge
+    - m3.medium
+    - m3.large
+    - m3.xlarge
+    - m3.2xlarge
+    - c1.medium
+    - c1.xlarge
+    - c3.large
+    - c3.xlarge
+    - c3.2xlarge
+    - c3.4xlarge
+    - c3.8xlarge
+    - c4.large
+    - c4.xlarge
+    - c4.2xlarge
+    - c4.4xlarge
+    - c4.8xlarge
+    - g2.2xlarge
+    - r3.large
+    - r3.xlarge
+    - r3.2xlarge
+    - r3.4xlarge
+    - r3.8xlarge
+    - i2.xlarge
+    - i2.2xlarge
+    - i2.4xlarge
+    - i2.8xlarge
+    - hi1.4xlarge
+    - hs1.8xlarge
+    - cr1.8xlarge
+    - cc2.8xlarge
+    - cg1.4xlarge
+    Description: Must be a valid EC2 instance type.
+  RDSInstanceType:
+    Type: String
+    Default: db.t2.micro
+    AllowedValues:
+    - db.t1.micro
+    - db.m1.small
+    - db.m4.large
+    - db.m4.xlarge
+    - db.m4.2xlarge
+    - db.m4.4xlarge
+    - db.m4.10xlarge
+    - db.r3.large
+    - db.r3.xlarge
+    - db.r3.2xlarge
+    - db.r3.4xlarge
+    - db.r3.8xlarge
+    - db.t2.micro
+    - db.t2.small
+    - db.t2.medium
+    - db.t2.large
+    - db.m3.medium
+    - db.m3.large
+    - db.m3.xlarge
+    - db.m3.2xlarge
+    - db.m2.xlarge
+    - db.m2.2xlarge
+    - db.m2.4xlarge
+    - db.cr1.8xlarge
+    Description: Must be a valid RDS DB instance type.
+  RDSUsername:
+    Type: String
+    MinLength: '1'
+    MaxLength: '16'
+    AllowedPattern: "[a-zA-Z][a-zA-Z0-9]*"
+    Description: Username for RDS database access
+    Default: rancher
+  RDSPassword:
+    NoEcho: true
+    Type: String
+    Description: Password for RDS database accesss (minimum 8 characters)
+    MinLength: '8'
+    MaxLength: '30'
+    AllowedPattern: "[a-zA-Z0-9]*"
+    ConstraintDescription: At least 8 alphanumeric characters.
+Conditions:
+  CreateHAResources: !Equals [ !Ref RancherHA, Y ]
+  CreateResources: !Equals [ !Ref RancherHA, N ]
+Mappings:
+  RegionRancherOsAMI:
+    us-east-1:
+      hvm: ami-827b1395
+    us-west-1:
+      hvm: ami-1affb27a
+    us-west-2:
+      hvm: ami-7adf0e1a
+    eu-west-1:
+      hvm: ami-90790be3
+    eu-central-1:
+      hvm: ami-caf704a5
+    ap-northeast-1:
+      hvm: ami-1e34ff7f
+    ap-northeast-2:
+      hvm: ami-a7f227c9
+    ap-southeast-1:
+      hvm: ami-c4d308a7
+    ap-southeast-2:
+      hvm: ami-60c5f303
+    sa-east-1:
+      hvm: ami-000d9c6c
+Resources:
+  RancherHost:
+    Type: AWS::EC2::Instance
+    Properties:
+      AvailabilityZone:
+        !Select
+          - 0
+          - !GetAZs { Ref: "AWS::Region" }
+      ImageId: !FindInMap [ RegionRancherOsAMI, !Ref "AWS::Region", hvm ]
+      SecurityGroupIds:
+        - !ImportValue GlobalSGId
+        - !ImportValue InternalSGId
+      InstanceType: !Ref EC2InstanceType
+      KeyName: !ImportValue KeyNameEC2
+      Tags:
+        - Key: Name
+          Value: RancherServer1
+      UserData:
+        Fn::Base64:
+          !Sub |
+            #cloud-config
+            rancher:
+              services:
+                rancher-server:
+                  privileged: true
+                  volumes:
+                  - /var/run/docker.sock:/var/run/docker.sock
+                  image: rancher/server
+                  ports:
+                  - 8080:8080
+                  restart: always
+                  environment:
+                  - CATTLE_DB_CATTLE_MYSQL_HOST=${RancherMySQL.Endpoint.Address}
+                  - CATTLE_DB_CATTLE_MYSQL_PORT=${RancherMySQL.Endpoint.Port}
+                  - CATTLE_DB_CATTLE_MYSQL_NAME=${RDSName}
+                  - CATTLE_DB_CATTLE_USERNAME=${RDSUsername}
+                  - CATTLE_DB_CATTLE_PASSWORD=${RDSPassword}
+    DependsOn: RancherMySQL
+  RancherHost2:
+    Type: AWS::EC2::Instance
+    Condition: CreateHAResources
+    Properties:
+      AvailabilityZone:
+        !Select
+          - 1
+          - !GetAZs { Ref: "AWS::Region" }
+      ImageId: !FindInMap [ RegionRancherOsAMI, !Ref "AWS::Region", hvm ]
+      SecurityGroupIds:
+        - !ImportValue GlobalSGId
+        - !ImportValue InternalSGId
+      InstanceType: !Ref EC2InstanceType
+      KeyName: !ImportValue KeyNameEC2
+      Tags:
+        - Key: Name
+          Value: RancherServer2
+    DependsOn: RancherMySQL
+  RancherHost3:
+    Type: AWS::EC2::Instance
+    Condition: CreateHAResources
+    Properties:
+      AvailabilityZone:
+        !Select
+          - 2
+          - !GetAZs { Ref: "AWS::Region" }
+      ImageId: !FindInMap [ RegionRancherOsAMI, !Ref "AWS::Region", hvm ]
+      SecurityGroupIds:
+        - !ImportValue GlobalSGId
+        - !ImportValue InternalSGId
+      InstanceType: !Ref EC2InstanceType
+      KeyName: !ImportValue KeyNameEC2
+      Tags:
+        - Key: Name
+          Value: RancherServer3
+    DependsOn: RancherMySQL
+  RancherMySQL:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      AllocatedStorage: '5'
+      VPCSecurityGroups:
+        - !ImportValue InternalSGId
+      DBInstanceClass: !Ref RDSInstanceType
+      Engine: MySQL
+      DBName: !Ref RDSName
+      DBInstanceIdentifier: !Ref RDSName
+      MasterUsername: !Ref RDSUsername
+      MasterUserPassword: !Ref RDSPassword
+    DeletionPolicy: Snapshot
+  RancherLBHA:
+    Type: AWS::ElasticLoadBalancing::LoadBalancer
+    Condition: CreateHAResources
+    Properties:
+      SecurityGroups:
+        - !ImportValue GlobalSGId
+      AvailabilityZones: !GetAZs ''
+      CrossZone: true
+      Listeners:
+      - LoadBalancerPort: '80'
+        InstancePort: '81'
+        Protocol: tcp
+      - LoadBalancerPort: '443'
+        InstancePort: '444'
+        Protocol: tcp
+      HealthCheck:
+        Target: HTTP:8080/ping
+        HealthyThreshold: '3'
+        UnhealthyThreshold: '5'
+        Interval: '30'
+        Timeout: '5'
+      ConnectionDrainingPolicy:
+        Enabled: 'true'
+        Timeout: '60'
+      Instances:
+        - Ref: RancherHost
+        - Ref: RancherHost2
+        - Ref: RancherHost3
+      LoadBalancerName: !Ref ELBName
+    DependsOn: RancherMySQL
+  RancherLB:
+    Type: AWS::ElasticLoadBalancing::LoadBalancer
+    Condition: CreateResources
+    Properties:
+      SecurityGroups:
+        - !ImportValue GlobalSGId
+      AvailabilityZones: !GetAZs ''
+      CrossZone: true
+      Listeners:
+      - LoadBalancerPort: '80'
+        InstancePort: '8080'
+        Protocol: HTTP
+      HealthCheck:
+        Target: HTTP:8080/ping
+        HealthyThreshold: '3'
+        UnhealthyThreshold: '5'
+        Interval: '30'
+        Timeout: '5'
+      ConnectionDrainingPolicy:
+        Enabled: 'true'
+        Timeout: '60'
+      Instances:
+        - Ref: RancherHost
+      LoadBalancerName: !Ref ELBName
+    DependsOn: RancherMySQL
+Outputs:
+  URL:
+    Description: The URL of Rancher UI
+    #Value: !Join[ '', [ http://, { !GetAtt RancherLB.DNSName } ] ]
+    Value: !If [CreateHAResources, !GetAtt RancherLBHA.DNSName, !GetAtt RancherLB.DNSName]
+AWSTemplateFormatVersion: '2010-09-09'

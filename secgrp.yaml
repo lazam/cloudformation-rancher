@@ -1,0 +1,116 @@
+---
+Parameters:
+  VPCName:
+    Description: Enter the VPC that will be used in this stack
+    Type: AWS::EC2::VPC::Id
+    MinLength: 1
+    MaxLength: 100
+  VPCInternal:
+    Description: Enter the VPC network that will be used in this stack
+    Type: String
+    MinLength: 1
+    MaxLength: 100
+    Default: 172.31.0.0/16
+  KeyName:
+    Description: The EC2 Private Key pair for SSH access
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: Must be the name of an existing EC2 KeyPair
+Resources:
+  GlobalRancherSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId:
+        Ref: VPCName
+      GroupDescription: Enable SSH access and Rancher ports
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '22'
+        ToPort: '22'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: '8080'
+        ToPort: '8080'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: '18080'
+        ToPort: '18080'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort : '80'
+        ToPort: '81'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: '443'
+        ToPort: '444'
+        CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: GlobalRancherSG
+  InternalRancherSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId:
+        Ref: VPCName
+      GroupDescription: Enable internal Rancher HA port
+      SecurityGroupIngress:
+      - IpProtocol: udp
+        FromPort: '500'
+        ToPort: '500'
+        CidrIp: !Ref VPCInternal
+      - IpProtocol: udp
+        FromPort: '4500'
+        ToPort: '4500'
+        CidrIp: !Ref VPCInternal
+      - IpProtocol: tcp
+        FromPort: '2181'
+        ToPort: '2181'
+        CidrIp: !Ref VPCInternal
+      - IpProtocol: udp
+        FromPort: '2376'
+        ToPort: '2376'
+        CidrIp: !Ref VPCInternal
+      - IpProtocol: tcp
+        FromPort: '2888'
+        ToPort: '2888'
+        CidrIp: !Ref VPCInternal
+      - IpProtocol: tcp
+        FromPort: '3888'
+        ToPort: '3888'
+        CidrIp: !Ref VPCInternal
+      - IpProtocol: tcp
+        FromPort: '6379'
+        ToPort: '6379'
+        CidrIp: !Ref VPCInternal
+      - IpProtocol: udp
+        FromPort: '2376'
+        ToPort: '2376'
+        CidrIp: !Ref VPCInternal
+      - IpProtocol: tcp
+        FromPort: '3306'
+        ToPort: '3306'
+        CidrIp: !Ref VPCInternal
+      Tags:
+        - Key: Name
+          Value: InternalRancherSG
+Outputs:
+  VPCId:
+    Description: VPC ID of Rancher environment
+    Value: !Ref VPCName
+    Export:
+      Name: VPCstack
+  GlobalRancherSGId:
+    Description: VPC ID of Rancher environment
+    Value: !GetAtt GlobalRancherSG.GroupId
+    Export:
+      Name: GlobalSGId
+  InternalRancherSGId:
+    Description: VPC ID of Rancher environment
+    Value: !GetAtt InternalRancherSG.GroupId
+    Export:
+      Name: InternalSGId
+  KeyNameEC2:
+    Description: Name of Public Key
+    Value: !Ref KeyName
+    Export:
+      Name: KeyNameEC2
+AWSTemplateFormatVersion: '2010-09-09'
