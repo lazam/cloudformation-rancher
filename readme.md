@@ -1,6 +1,6 @@
-Rancher cluster using AWS cloudformation (Single/Multi node)
+## Rancher cluster using AWS cloudformation (Single/Multi node)
 
-Architecture Information:
+### Architecture Information:
 
 Platform runs in Rancher OS.
 
@@ -10,6 +10,6 @@ Security group stack consists of an internal security group which opens the port
 Rancher stack consists of EC2 , ELB and RDS.
 
 
-TBD:
+### TBD:
 - Automatic HA setup
 - Addition of nodes
