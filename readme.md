@@ -1,4 +1,4 @@
-Rancher cluster using AWS cloudformation
+Rancher cluster using AWS cloudformation (Single/Multi node)
 
 Architecture Information:
 
